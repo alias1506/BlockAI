@@ -1,0 +1,105 @@
+{
+  "goals": {
+    "ITEM:minecraft:obsidian": {
+      "type": "item",
+      "requires": ["ITEM:minecraft:diamond_pickaxe", "ITEM:minecraft:water_bucket", "FIND_LAVA"],
+      "action": "GATHER"
+    },
+    "ITEM:minecraft:flint_and_steel": {
+      "type": "item",
+      "requires": ["ITEM:minecraft:iron_ingot", "ITEM:minecraft:flint"],
+      "action": "CRAFT"
+    },
+    "ITEM:minecraft:flint": {
+      "type": "item",
+      "requires": ["GATHER:minecraft:gravel"],
+      "action": "GATHER"
+    },
+    "ITEM:minecraft:water_bucket": {
+      "type": "item",
+      "requires": ["ITEM:minecraft:bucket", "FIND_WATER"],
+      "action": "INTERACT"
+    },
+    "ITEM:minecraft:bucket": {
+      "type": "item",
+      "requires": ["ITEM:minecraft:iron_ingot"],
+      "action": "CRAFT"
+    },
+    "ITEM:minecraft:diamond_pickaxe": {
+      "type": "item",
+      "requires": ["ITEM:minecraft:diamond", "ITEM:minecraft:stick"],
+      "action": "CRAFT"
+    },
+    "ITEM:minecraft:diamond": {
+      "type": "item",
+      "requires": ["ITEM:minecraft:iron_pickaxe", "FIND_DIAMOND_ORE"],
+      "action": "GATHER"
+    },
+    "ITEM:minecraft:iron_pickaxe": {
+      "type": "item",
+      "requires": ["ITEM:minecraft:iron_ingot", "ITEM:minecraft:stick"],
+      "action": "CRAFT"
+    },
+    "ITEM:minecraft:iron_ingot": {
+      "type": "item",
+      "requires": ["ITEM:minecraft:raw_iron", "ITEM:minecraft:furnace", "ITEM:minecraft:coal"],
+      "action": "INTERACT"
+    },
+    "ITEM:minecraft:raw_iron": {
+      "type": "item",
+      "requires": ["ITEM:minecraft:stone_pickaxe", "FIND_IRON_ORE"],
+      "action": "GATHER"
+    },
+    "ITEM:minecraft:coal": {
+      "type": "item",
+      "requires": ["ITEM:minecraft:wooden_pickaxe", "FIND_COAL_ORE"],
+      "action": "GATHER"
+    },
+    "ITEM:minecraft:furnace": {
+      "type": "item",
+      "requires": ["ITEM:minecraft:cobblestone", "ITEM:minecraft:crafting_table"],
+      "action": "CRAFT"
+    },
+    "ITEM:minecraft:stone_pickaxe": {
+      "type": "item",
+      "requires": ["ITEM:minecraft:cobblestone", "ITEM:minecraft:stick"],
+      "action": "CRAFT"
+    },
+    "ITEM:minecraft:cobblestone": {
+      "type": "item",
+      "requires": ["ITEM:minecraft:wooden_pickaxe"],
+      "action": "GATHER"
+    },
+    "ITEM:minecraft:wooden_pickaxe": {
+      "type": "item",
+      "requires": ["ITEM:minecraft:oak_planks", "ITEM:minecraft:stick"],
+      "action": "CRAFT"
+    },
+    "ITEM:minecraft:stick": {
+      "type": "item",
+      "requires": ["ITEM:minecraft:oak_planks"],
+      "action": "CRAFT"
+    },
+    "ITEM:minecraft:crafting_table": {
+      "type": "item",
+      "requires": ["ITEM:minecraft:oak_planks"],
+      "action": "CRAFT"
+    },
+    "ITEM:minecraft:oak_planks": {
+      "type": "item",
+      "requires": ["ITEM:minecraft:oak_log"],
+      "action": "CRAFT"
+    },
+    "ITEM:minecraft:oak_log": {
+      "type": "item",
+      "requires": [],
+      "action": "GATHER"
+    },
+    "FIND_LAVA": { "type": "interaction", "action": "NAVIGATE" },
+    "FIND_WATER": { "type": "interaction", "action": "NAVIGATE" },
+    "FIND_DIAMOND_ORE": { "type": "interaction", "action": "NAVIGATE" },
+    "FIND_IRON_ORE": { "type": "interaction", "action": "NAVIGATE" },
+    "FIND_COAL_ORE": { "type": "interaction", "action": "NAVIGATE" },
+    "GATHER:minecraft:gravel": { "type": "interaction", "action": "GATHER" }
+  }
+}

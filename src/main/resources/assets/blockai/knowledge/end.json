@@ -1,0 +1,30 @@
+{
+  "goals": {
+    "DEFEAT_ENDER_DRAGON": {
+      "type": "complex",
+      "requires": ["REACH_END", "DESTROY_END_CRYSTALS", "DRAGON_COMBAT"]
+    },
+    "REACH_END": {
+      "type": "complex",
+      "requires": ["FIND_STRONGHOLD", "ACTIVATE_END_PORTAL"]
+    },
+    "DESTROY_END_CRYSTALS": {
+      "type": "combat",
+      "action": "COMBAT"
+    },
+    "DRAGON_COMBAT": {
+      "type": "combat",
+      "action": "COMBAT"
+    },
+    "FIND_STRONGHOLD": {
+      "type": "interaction",
+      "requires": ["ITEM:minecraft:ender_eye"],
+      "action": "NAVIGATE"
+    },
+    "ACTIVATE_END_PORTAL": {
+      "type": "interaction",
+      "requires": ["ITEM:minecraft:ender_eye"],
+      "action": "INTERACT"
+    }
+  }
+}

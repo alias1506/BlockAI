@@ -1,0 +1,34 @@
+{
+	"schemaVersion": 1,
+	"id": "blockai",
+	"version": "${version}",
+	"name": "BlockAI",
+	"description": "This is an example description! Tell everyone what your mod is about!",
+	"authors": [
+		"Me!"
+	],
+	"contact": {
+		"homepage": "https://fabricmc.net/",
+		"sources": "https://github.com/FabricMC/fabric-example-mod"
+	},
+	"license": "CC0-1.0",
+	"icon": "assets/blockai/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"com.blockai.BlockAI"
+		],
+		"client": [
+			"com.blockai.client.BlockAIClient"
+		]
+	},
+	"mixins": [
+		"blockai.mixins.json"
+	],
+	"depends": {
+		"fabricloader": ">=0.19.5",
+		"minecraft": "~26.2",
+		"java": ">=25",
+		"fabric-api": "*"
+	}
+}

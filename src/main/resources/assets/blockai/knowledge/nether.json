@@ -1,0 +1,46 @@
+{
+  "goals": {
+    "ITEM:minecraft:ender_eye": {
+      "type": "item",
+      "requires": ["ITEM:minecraft:ender_pearl", "ITEM:minecraft:blaze_powder"],
+      "action": "CRAFT"
+    },
+    "ITEM:minecraft:ender_pearl": {
+      "type": "item",
+      "requires": ["COMBAT:minecraft:enderman"],
+      "action": "COMBAT"
+    },
+    "ITEM:minecraft:blaze_powder": {
+      "type": "item",
+      "requires": ["ITEM:minecraft:blaze_rod"],
+      "action": "CRAFT"
+    },
+    "ITEM:minecraft:blaze_rod": {
+      "type": "item",
+      "requires": ["REACH_NETHER", "FIND_FORTRESS", "COMBAT:minecraft:blaze"],
+      "action": "COMBAT"
+    },
+    "REACH_NETHER": {
+      "type": "complex",
+      "requires": ["ITEM:minecraft:obsidian", "ITEM:minecraft:flint_and_steel", "ACTIVATE_NETHER_PORTAL"]
+    },
+    "FIND_FORTRESS": {
+      "type": "interaction",
+      "requires": [],
+      "action": "NAVIGATE"
+    },
+    "COMBAT:minecraft:enderman": {
+      "type": "combat",
+      "action": "COMBAT"
+    },
+    "COMBAT:minecraft:blaze": {
+      "type": "combat",
+      "action": "COMBAT"
+    },
+    "ACTIVATE_NETHER_PORTAL": {
+      "type": "interaction",
+      "requires": ["ITEM:minecraft:flint_and_steel", "ITEM:minecraft:obsidian"],
+      "action": "INTERACT"
+    }
+  }
+}

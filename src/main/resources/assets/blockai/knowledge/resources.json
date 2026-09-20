@@ -1,0 +1,33 @@
+{
+  "minecraftVersion": "26.2",
+  "knowledgeVersion": 1,
+  "categories": {
+    "WOOD_LOG": {
+      "default_tool": "axe",
+      "crafts_into": "WOOD_PLANK"
+    },
+    "WOOD_PLANK": {
+      "default_tool": "axe",
+      "crafts_into": "STICK"
+    },
+    "STONE": {
+      "requires_tool": true,
+      "default_tool": "pickaxe",
+      "drops": "minecraft:cobblestone",
+      "equivalent": ["minecraft:stone", "minecraft:cobblestone", "minecraft:deepslate", "minecraft:cobbled_deepslate"]
+    },
+    "DIRT": {
+      "default_tool": "shovel"
+    },
+    "SAND": {
+      "default_tool": "shovel"
+    },
+    "GRAVEL": {
+      "default_tool": "shovel"
+    }
+  },
+  "equivalencies": {
+    "WOOD_LOG": ["minecraft:oak_log", "minecraft:spruce_log", "minecraft:birch_log", "minecraft:jungle_log", "minecraft:acacia_log", "minecraft:dark_oak_log", "minecraft:mangrove_log", "minecraft:cherry_log"],
+    "WOOD_PLANK": ["minecraft:oak_planks", "minecraft:spruce_planks", "minecraft:birch_planks", "minecraft:jungle_planks", "minecraft:acacia_planks", "minecraft:dark_oak_planks", "minecraft:mangrove_planks", "minecraft:cherry_planks"]
+  }
+}

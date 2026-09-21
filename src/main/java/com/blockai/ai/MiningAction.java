@@ -246,23 +246,25 @@ public class MiningAction {
             ItemEntity firstDrop = targetDrops.get(0);
             double distSqr = player.distanceToSqr(firstDrop);
             
-            if (distSqr > 1.5) {
-                // Move towards drop
-                var path = com.blockai.ai.pathing.AStarPathfinder.findPath(level, player.blockPosition(), firstDrop.blockPosition());
-                if (path != null) {
-                    player.movementController.setPath(path);
+            if (distSqr < 2.0) {
+                // Forceful pickup
+                net.minecraft.world.item.ItemStack stack = firstDrop.getItem();
+                boolean added = player.getInventory().add(stack);
+                if (added || stack.isEmpty()) {
+                    firstDrop.discard();
+                    System.out.println("[BlockAI] MiningAction: Forcefully collected item.");
                 } else {
-                    // Try to move directly to the position
-                    player.movementController.setPath(List.of(firstDrop.blockPosition()));
+                    firstDrop.setItem(stack); // update remaining count if partially added
                 }
             } else {
-                // Stop moving if close enough, physics engine will handle collision
-                player.movementController.stop();
+                // Move directly to the position since it is very close
+                player.movementController.setPath(List.of(firstDrop.blockPosition()));
             }
             
             waitTicks++;
-            if (waitTicks > 60) {
+            if (waitTicks > 100) {
                 System.out.println("[BlockAI] MiningAction: Drop collection timed out.");
+
                 state = MiningState.VERIFY_INVENTORY;
             }
         }

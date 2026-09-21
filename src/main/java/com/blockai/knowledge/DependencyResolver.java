@@ -160,7 +160,7 @@ public class DependencyResolver {
         
         String type = task.getType().toLowerCase();
         
-        if (type.contains("mine") || type.contains("gather") || type.contains("collect")) {
+        if (type.contains("mine") || type.contains("gather") || type.contains("collect") || type.contains("craft") || type.contains("make") || type.contains("build")) {
             String specific = task.getSpecificItem();
             if (specific != null) {
                 return "ITEM:" + specific;

@@ -62,7 +62,7 @@ public class InteractionValidator {
         BlockHitResult hitResult = level.clip(new ClipContext(
                 eyePos,
                 blockCenter,
-                ClipContext.Block.COLLIDER,
+                ClipContext.Block.OUTLINE,
                 ClipContext.Fluid.NONE,
                 player
         ));

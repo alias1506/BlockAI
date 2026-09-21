@@ -53,6 +53,11 @@ public class MovementController {
         if (!player.canExecuteAction()) return state;
         
         if (state == MovementState.PATH_FAILED || state == MovementState.ARRIVED || state == MovementState.IDLE) {
+            // Apply gravity and physics when idle
+            player.zza = 0.0f;
+            player.setJumping(false);
+            player.travel(new Vec3(0, 0, 0));
+            player.move(net.minecraft.world.entity.MoverType.SELF, player.getDeltaMovement());
             return state;
         }
         

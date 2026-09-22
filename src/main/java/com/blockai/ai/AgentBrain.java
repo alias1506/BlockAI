@@ -1,12 +1,14 @@
 package com.blockai.ai;
 
-import com.blockai.player.AIPlayer;
+import com.blockai.ai.AIPlayer;
 import net.minecraft.core.BlockPos;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.HashSet;
+
+import com.blockai.ai.memory.FailureMemory;
 
 public class AgentBrain {
     
@@ -32,19 +34,19 @@ public class AgentBrain {
     }
     
     public void registerPathFailure(BlockPos pos) {
-        TargetFailureMemory.recordFailure(pos, "PATH_BLOCKED");
+        FailureMemory.recordFailure(pos, "PATH_BLOCKED");
     }
     
     public boolean isBlacklisted(BlockPos pos) {
-        return TargetFailureMemory.isBlacklisted(pos);
+        return FailureMemory.isBlacklisted(pos);
     }
     
     public int getFailureCount(BlockPos pos) {
-        TargetFailureMemory.FailureRecord record = TargetFailureMemory.getRecord(pos);
+        FailureMemory.FailureRecord record = FailureMemory.getRecord(pos);
         return record != null ? record.attempts : 0;
     }
     
     public void clearMemory() {
-        TargetFailureMemory.clear();
+        FailureMemory.clear();
     }
 }

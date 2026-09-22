@@ -1,6 +1,6 @@
 package com.blockai.client.screen;
 
-import com.blockai.ai.GroqClient;
+import com.blockai.groq.GroqClient;
 import com.blockai.config.APIKeyManager;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
@@ -10,6 +10,17 @@ import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.List;
+
+import com.blockai.inventory.InventoryManager;
+import com.blockai.ai.planner.AIPlanner;
+import com.blockai.groq.GroqProvider;
+import com.blockai.ai.AIPlayerController;
+import com.blockai.ai.AIPlayer;
+import com.blockai.groq.AIProvider;
+import com.blockai.movement.PathFinder;
+import com.blockai.ai.planner.RoadmapTask;
+import com.blockai.ai.knowledge.DependencyResolver;
+import com.blockai.ai.planner.Roadmap;
 
 public class BlockAIChatScreen extends Screen {
     public static boolean isActive = false;
@@ -30,7 +41,7 @@ public class BlockAIChatScreen extends Screen {
         }
     }
 
-    private static final List<ChatMessage> chatHistory = new ArrayList<>();
+    private static final List<ChatMessage> chatHistory = new java.util.concurrent.CopyOnWriteArrayList<>();
     private static boolean hasGreeted = false;
 
     private EditBox chatField;
@@ -116,10 +127,26 @@ public class BlockAIChatScreen extends Screen {
         if (message.startsWith("/")) {
             handleCommand(message);
         } else {
+            String lowerMessage = message.toLowerCase();
+            if (lowerMessage.matches(".*\\bfollow\\b.*") || lowerMessage.matches(".*\\bcome\\b.*") || lowerMessage.matches(".*\\bstay\\b.*")) {
+                addPlayerMessage(message);
+                if (this.minecraft != null && this.minecraft.getSingleplayerServer() != null) {
+                    this.minecraft.getSingleplayerServer().execute(() -> {
+                        com.blockai.ai.AIPlayer ai = (com.blockai.ai.AIPlayer) com.blockai.ai.AIPlayerController.getAIPlayer(this.minecraft.getSingleplayerServer());
+                        if (ai != null) {
+                            ai.agentController.startFollow(ai, this.minecraft.player);
+                            this.minecraft.execute(() -> addAIMessage("Okay, I'll follow you."));
+                        } else {
+                            this.minecraft.execute(() -> addAIMessage("I'm not spawned yet."));
+                        }
+                    });
+                }
+                return;
+            }
+            
             addPlayerMessage(message);
             if (!APIKeyManager.hasKey()) {
-                addAIMessage("No Groq API key is registered.\nUse /api <your_groq_api_key> to register a key.");
-                return;
+                addAIMessage("No Groq API key is registered. Falling back to local deterministic planner.");
             }
             
             chatHistory.removeIf(m -> m.type == MessageType.SYSTEM && m.text.equals("Thinking..."));
@@ -127,7 +154,7 @@ public class BlockAIChatScreen extends Screen {
             
             String contextMessage = message;
             if (this.minecraft != null && this.minecraft.getSingleplayerServer() != null) {
-                com.blockai.player.AIPlayer ai = (com.blockai.player.AIPlayer) com.blockai.player.AIPlayerSpawner.getAIPlayer(this.minecraft.getSingleplayerServer());
+                com.blockai.ai.AIPlayer ai = (com.blockai.ai.AIPlayer) com.blockai.ai.AIPlayerController.getAIPlayer(this.minecraft.getSingleplayerServer());
                 if (ai != null) {
                     StringBuilder ctx = new StringBuilder(message);
                     ctx.append("\n\n--- CURRENT CONTEXT ---\n");
@@ -147,21 +174,32 @@ public class BlockAIChatScreen extends Screen {
                     contextMessage = ctx.toString();
                 }
             }
+            final String finalContextMessage = contextMessage;
             
-            GroqClient.sendMessageAsync(contextMessage, roadmap -> {
+            String lowerMsg = message.toLowerCase();
+            boolean isBasicTask = lowerMsg.startsWith("get ") || lowerMsg.startsWith("gather ") || lowerMsg.startsWith("collect ") || lowerMsg.startsWith("mine ") || lowerMsg.startsWith("craft ") || lowerMsg.startsWith("make ") || lowerMsg.startsWith("build ") || lowerMsg.startsWith("clear ") || lowerMsg.startsWith("excavate ");
+            
+            com.blockai.groq.AIProvider provider;
+            if (isBasicTask || !APIKeyManager.hasKey()) {
+                provider = new com.blockai.ai.planner.AIPlanner();
+            } else {
+                provider = new com.blockai.groq.GroqProvider();
+            }
+            
+            java.util.function.Consumer<com.blockai.ai.planner.Roadmap> handleSuccess = roadmap -> {
                 chatHistory.removeIf(m -> m.type == MessageType.SYSTEM && m.text.equals("Thinking..."));
                 
                 if (this.minecraft != null && this.minecraft.getSingleplayerServer() != null) {
                     this.minecraft.getSingleplayerServer().execute(() -> {
                         net.minecraft.server.MinecraftServer server = this.minecraft.getSingleplayerServer();
-                        com.blockai.player.AIPlayer ai = (com.blockai.player.AIPlayer) com.blockai.player.AIPlayerSpawner.getAIPlayer(server);
+                        com.blockai.ai.AIPlayer ai = (com.blockai.ai.AIPlayer) com.blockai.ai.AIPlayerController.getAIPlayer(server);
                         if (ai != null) {
                             ai.agentController.start(ai, roadmap);
                             
                             // Re-sync UI state on the client thread
                             this.minecraft.execute(() -> {
                                 StringBuilder sb = new StringBuilder("I've created a plan for this task:\n\n");
-                                for (com.blockai.ai.RoadmapTask task : roadmap.getTasks()) {
+                                for (com.blockai.ai.planner.RoadmapTask task : roadmap.getTasks()) {
                                     sb.append(task.getId()).append(". ").append(task.getDescription()).append("\n   ○ PENDING\n");
                                 }
                                 addAIMessage(sb.toString().trim());
@@ -175,9 +213,19 @@ public class BlockAIChatScreen extends Screen {
                 } else {
                     addSystemMessage("Error: Not in a singleplayer world.");
                 }
-            }, error -> {
-                chatHistory.removeIf(m -> m.type == MessageType.SYSTEM && m.text.equals("Thinking..."));
-                addSystemMessage("Error: " + error);
+            };
+            
+            provider.sendMessageAsync(finalContextMessage, handleSuccess, error -> {
+                if (provider instanceof com.blockai.groq.GroqProvider) {
+                    addSystemMessage("Groq API failed (" + error + "). Falling back to local deterministic planner...");
+                    new com.blockai.ai.planner.AIPlanner().sendMessageAsync(finalContextMessage, handleSuccess, err -> {
+                        chatHistory.removeIf(m -> m.type == MessageType.SYSTEM && m.text.equals("Thinking..."));
+                        addSystemMessage("Local Planner Error: " + err);
+                    });
+                } else {
+                    chatHistory.removeIf(m -> m.type == MessageType.SYSTEM && m.text.equals("Thinking..."));
+                    addSystemMessage("Error: " + error);
+                }
             });
         }
     }
@@ -221,7 +269,7 @@ public class BlockAIChatScreen extends Screen {
         } else if (lowerCmd.equals("/start")) {
             if (this.minecraft != null && this.minecraft.getSingleplayerServer() != null) {
                 this.minecraft.getSingleplayerServer().execute(() -> {
-                    com.blockai.player.AIPlayer ai = (com.blockai.player.AIPlayer) com.blockai.player.AIPlayerSpawner.getAIPlayer(this.minecraft.getSingleplayerServer());
+                    com.blockai.ai.AIPlayer ai = (com.blockai.ai.AIPlayer) com.blockai.ai.AIPlayerController.getAIPlayer(this.minecraft.getSingleplayerServer());
                     if (ai != null) {
                         com.blockai.ai.AgentState state = ai.getAgentState();
                         if (state == com.blockai.ai.AgentState.RUNNING) {
@@ -241,7 +289,7 @@ public class BlockAIChatScreen extends Screen {
                         }
                     } else {
                         // AI doesn't exist, spawn it
-                        com.blockai.player.AIPlayerSpawner.forceSpawn(this.minecraft.getSingleplayerServer());
+                        com.blockai.ai.AIPlayerController.forceSpawn(this.minecraft.getSingleplayerServer());
                         this.minecraft.execute(() -> addAIMessage("BlockAI started. Spawning AI player and waiting for your next task."));
                     }
                 });
@@ -249,7 +297,7 @@ public class BlockAIChatScreen extends Screen {
         } else if (lowerCmd.equals("/pause") || lowerCmd.equals("/resume") || lowerCmd.equals("/stop")) {
             if (this.minecraft != null && this.minecraft.getSingleplayerServer() != null) {
                 this.minecraft.getSingleplayerServer().execute(() -> {
-                    com.blockai.player.AIPlayer ai = (com.blockai.player.AIPlayer) com.blockai.player.AIPlayerSpawner.getAIPlayer(this.minecraft.getSingleplayerServer());
+                    com.blockai.ai.AIPlayer ai = (com.blockai.ai.AIPlayer) com.blockai.ai.AIPlayerController.getAIPlayer(this.minecraft.getSingleplayerServer());
                     if (ai != null) {
                         if (lowerCmd.equals("/pause")) ai.agentController.pause(ai);
                         else if (lowerCmd.equals("/resume")) ai.agentController.resume(ai);
@@ -267,11 +315,11 @@ public class BlockAIChatScreen extends Screen {
         } else if (lowerCmd.equals("/blockai_test_move")) {
             if (this.minecraft != null && this.minecraft.getSingleplayerServer() != null) {
                 this.minecraft.getSingleplayerServer().execute(() -> {
-                    com.blockai.player.AIPlayer ai = (com.blockai.player.AIPlayer) com.blockai.player.AIPlayerSpawner.getAIPlayer(this.minecraft.getSingleplayerServer());
+                    com.blockai.ai.AIPlayer ai = (com.blockai.ai.AIPlayer) com.blockai.ai.AIPlayerController.getAIPlayer(this.minecraft.getSingleplayerServer());
                     if (ai != null) {
                         net.minecraft.core.BlockPos target = ai.blockPosition().relative(ai.getDirection(), 5);
                         this.minecraft.execute(() -> addAIMessage("Movement test started. Finding path to " + target));
-                        java.util.List<net.minecraft.core.BlockPos> path = com.blockai.ai.pathing.AStarPathfinder.findPath(
+                        java.util.List<net.minecraft.core.BlockPos> path = com.blockai.movement.PathFinder.findPath(
                             (net.minecraft.server.level.ServerLevel) ai.level(), ai.blockPosition(), target);
                         
                         if (path != null) {
@@ -286,13 +334,30 @@ public class BlockAIChatScreen extends Screen {
                     }
                 });
             }
+        } else if (lowerCmd.equals("/testgather")) {
+            if (this.minecraft != null && this.minecraft.getSingleplayerServer() != null) {
+                this.minecraft.getSingleplayerServer().execute(() -> {
+                    com.blockai.ai.AIPlayer ai = (com.blockai.ai.AIPlayer) com.blockai.ai.AIPlayerController.getAIPlayer(this.minecraft.getSingleplayerServer());
+                    if (ai != null) {
+                        this.minecraft.execute(() -> addSystemMessage("[BlockAI][TEST] Starting deterministic wood gathering"));
+                        java.util.List<com.blockai.ai.planner.RoadmapTask> tasks = new java.util.ArrayList<>();
+                        com.blockai.ai.planner.RoadmapTask gatherTask = new com.blockai.ai.planner.RoadmapTask(1, "resource_gathering", "Collect 4 wooden logs nearby");
+                        gatherTask.setResource("WOOD_LOG", null, 4);
+                        tasks.add(gatherTask);
+                        com.blockai.ai.planner.Roadmap testMap = new com.blockai.ai.planner.Roadmap("Collect 4 wooden logs nearby", "Test deterministic gathering", tasks);
+                        ai.agentController.start(ai, testMap);
+                    } else {
+                        this.minecraft.execute(() -> addAIMessage("BlockAI is not spawned."));
+                    }
+                });
+            }
         } else if (lowerCmd.equals("/status")) {
             if (this.minecraft != null && this.minecraft.getSingleplayerServer() != null) {
                 this.minecraft.getSingleplayerServer().execute(() -> {
-                    com.blockai.player.AIPlayer ai = (com.blockai.player.AIPlayer) com.blockai.player.AIPlayerSpawner.getAIPlayer(this.minecraft.getSingleplayerServer());
+                    com.blockai.ai.AIPlayer ai = (com.blockai.ai.AIPlayer) com.blockai.ai.AIPlayerController.getAIPlayer(this.minecraft.getSingleplayerServer());
                     if (ai != null) {
                         String stateStr = ai.getAgentState().name();
-                        com.blockai.ai.Roadmap roadmap = ai.agentController.getCurrentRoadmap();
+                        com.blockai.ai.planner.Roadmap roadmap = ai.agentController.getCurrentRoadmap();
                         String goalStr = roadmap != null ? roadmap.getGoal() : "None";
                         String taskStr = "None";
                         String progressStr = "0/0";
@@ -330,9 +395,9 @@ public class BlockAIChatScreen extends Screen {
                 this.minecraft.getSingleplayerServer().execute(() -> {
                     net.minecraft.server.MinecraftServer server = this.minecraft.getSingleplayerServer();
                     net.minecraft.server.level.ServerPlayer human = server.getPlayerList().getPlayer(this.minecraft.player.getUUID());
-                    net.minecraft.server.level.ServerPlayer ai = com.blockai.player.AIPlayerSpawner.getAIPlayer(server);
+                    net.minecraft.server.level.ServerPlayer ai = com.blockai.ai.AIPlayerController.getAIPlayer(server);
                     if (human != null && ai != null) {
-                        com.blockai.player.AIInventoryHelper.openAIInventoryFor(human, ai);
+                        com.blockai.inventory.InventoryManager.openAIInventoryFor(human, ai);
                     }
                 });
             }
@@ -342,10 +407,10 @@ public class BlockAIChatScreen extends Screen {
             if (this.minecraft != null && this.minecraft.getSingleplayerServer() != null) {
                 this.minecraft.getSingleplayerServer().execute(() -> {
                     net.minecraft.server.MinecraftServer server = this.minecraft.getSingleplayerServer();
-                    com.blockai.player.AIPlayer ai = (com.blockai.player.AIPlayer) com.blockai.player.AIPlayerSpawner.getAIPlayer(server);
+                    com.blockai.ai.AIPlayer ai = (com.blockai.ai.AIPlayer) com.blockai.ai.AIPlayerController.getAIPlayer(server);
                     if (ai != null) {
-                        com.blockai.ai.RoadmapTask fakeTask = new com.blockai.ai.RoadmapTask(-1, "combat", goalId);
-                        java.util.List<com.blockai.ai.RoadmapTask> plan = com.blockai.knowledge.DependencyResolver.resolveDependencies(fakeTask, ai);
+                        com.blockai.ai.planner.RoadmapTask fakeTask = new com.blockai.ai.planner.RoadmapTask(-1, "combat", goalId);
+                        java.util.List<com.blockai.ai.planner.RoadmapTask> plan = com.blockai.ai.knowledge.DependencyResolver.resolveDependencies(fakeTask, ai);
                         
                         StringBuilder sb = new StringBuilder("Dependency Graph Output for " + goalId + ":\n");
                         for (int i = 0; i < plan.size(); i++) {

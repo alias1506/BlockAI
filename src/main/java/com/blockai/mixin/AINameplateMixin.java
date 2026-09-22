@@ -1,6 +1,6 @@
 package com.blockai.mixin;
 
-import com.blockai.client.AIHudData;
+import com.blockai.client.hud.AIHudData;
 import net.minecraft.client.renderer.entity.player.AvatarRenderer;
 import net.minecraft.client.renderer.entity.state.AvatarRenderState;
 import net.minecraft.network.chat.Component;

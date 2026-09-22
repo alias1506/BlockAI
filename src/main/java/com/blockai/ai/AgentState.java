@@ -10,5 +10,6 @@ public enum AgentState {
     PAUSED,
     STOPPED,
     STARTING,
+    FOLLOW_PLAYER,
     ERROR
 }

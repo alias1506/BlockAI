@@ -1,6 +1,6 @@
 package com.blockai.network;
 
-import com.blockai.player.AIPlayerSpawner;
+import com.blockai.ai.AIPlayerController;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
@@ -10,6 +10,9 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.network.chat.Component;
+
+import com.blockai.inventory.InventoryManager;
+import com.blockai.client.hud.AIHudData;
 
 public class BlockAINetworking {
 
@@ -65,7 +68,7 @@ public class BlockAINetworking {
                 ServerPlayer humanPlayer = context.player();
                 System.out.println("[BlockAI] AI inventory request received from " + humanPlayer.getName().getString());
                 
-                ServerPlayer aiPlayer = AIPlayerSpawner.getAIPlayer(context.server());
+                ServerPlayer aiPlayer = AIPlayerController.getAIPlayer(context.server());
                 
                 if (aiPlayer != null) {
                     System.out.println("[BlockAI] AI entity found: " + aiPlayer.getUUID());
@@ -79,7 +82,7 @@ public class BlockAINetworking {
                         }
                     }
                     
-                    com.blockai.player.AIInventoryHelper.openAIInventoryFor(humanPlayer, aiPlayer);
+                    com.blockai.inventory.InventoryManager.openAIInventoryFor(humanPlayer, aiPlayer);
                     System.out.println("[BlockAI] Inventory opened for " + humanPlayer.getName().getString());
                 } else {
                     System.out.println("[BlockAI] Cannot open inventory: AI player not found");
@@ -94,7 +97,7 @@ public class BlockAINetworking {
     public static void registerClient() {
         ClientPlayNetworking.registerGlobalReceiver(HudSyncPayload.TYPE, (payload, context) -> {
             context.client().execute(() -> {
-                com.blockai.client.AIHudData.update(
+                com.blockai.client.hud.AIHudData.update(
                         payload.health(),
                         payload.maxHealth(),
                         payload.hunger(),

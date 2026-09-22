@@ -1,16 +1,19 @@
 {
-	"required": true,
-	"package": "com.blockai.mixin",
-	"compatibilityLevel": "JAVA_25",
-	"mixins": [
-		"ExampleMixin",
-		"ClientPlayerSkinMixin",
-		"AINameplateMixin"
-	],
-	"injectors": {
-		"defaultRequire": 1
-	},
-	"overwrites": {
-		"requireAnnotations": true
-	}
+    "required":  true,
+    "package":  "com.blockai.mixin",
+    "compatibilityLevel":  "JAVA_25",
+    "mixins":  [
+                   "ExampleMixin",
+                   "ClientPlayerSkinMixin",
+                   "AINameplateMixin",
+                   "ServerPlayerTickTraceMixin",
+                   "PlayerPickupTraceMixin",
+                   "ItemEntityPickupTraceMixin"
+               ],
+    "injectors":  {
+                      "defaultRequire":  1
+                  },
+    "overwrites":  {
+                       "requireAnnotations":  true
+                   }
 }

@@ -7,6 +7,11 @@ import net.minecraft.resources.Identifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.blockai.ai.AIPlayerController;
+import com.blockai.ai.knowledge.MinecraftKnowledgeBase;
+import com.blockai.ai.memory.AgentMemory;
+import com.blockai.ai.memory.ResourceMemory;
+
 public class BlockAI implements ModInitializer {
 	public static final String MOD_ID = "blockai";
 
@@ -22,18 +27,18 @@ public class BlockAI implements ModInitializer {
 		// Proceed with mild caution.
 
 		LOGGER.info("Hello Fabric world!");
-		com.blockai.player.AIPlayerSpawner.register();
+		com.blockai.ai.AIPlayerController.register();
 		com.blockai.network.BlockAINetworking.registerServer();
 		
 		net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents.SERVER_STARTED.register(server -> {
-		    com.blockai.ai.MemoryManager.load(server);
-		    com.blockai.ai.LearningMemory.load(server);
-		    com.blockai.knowledge.MinecraftKnowledgeBase.initialize(server);
+		    com.blockai.ai.memory.AgentMemory.load(server);
+		    com.blockai.ai.memory.ResourceMemory.load(server);
+		    com.blockai.ai.knowledge.MinecraftKnowledgeBase.initialize(server);
 		    com.blockai.config.APIKeyManager.load(server);
 		});
 		net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
-		    // Don't need to explicitly save LearningMemory here as it saves on every record, but we could
-		    com.blockai.ai.MemoryManager.save(server);
+		    // Don't need to explicitly save ResourceMemory here as it saves on every record, but we could
+		    com.blockai.ai.memory.AgentMemory.save(server);
 		    com.blockai.config.APIKeyManager.clear();
 		});
 	}

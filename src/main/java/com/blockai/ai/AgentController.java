@@ -1,17 +1,37 @@
 package com.blockai.ai;
 
-import com.blockai.player.AIPlayer;
+import com.blockai.ai.AIPlayer;
+
+import com.blockai.world.WorldScanner;
+import com.blockai.gathering.ResourceResolver;
+import com.blockai.execution.TaskResult;
+import com.blockai.ai.planner.RoadmapTaskType;
+import com.blockai.client.screen.BlockAIChatScreen;
+import com.blockai.ai.knowledge.DependencyResolver;
+import com.blockai.gathering.ResourceCategory;
+import com.blockai.ai.memory.ResourceMemory;
+import com.blockai.execution.TaskState;
+import com.blockai.ai.planner.RoadmapTask;
+import com.blockai.ai.planner.Roadmap;
 
 public class AgentController {
 
     private Roadmap currentRoadmap = null;
+    private net.minecraft.world.entity.player.Player followTarget = null;
 
     public void start(AIPlayer player, Roadmap roadmap) {
         this.currentRoadmap = roadmap;
-        this.currentRoadmap.setState(ExecutionState.RUNNING);
+        this.currentRoadmap.setState(TaskState.RUNNING);
         this.currentRoadmap.setCurrentTaskIndex(0);
         player.setAgentState(AgentState.RUNNING);
         System.out.println("[BlockAI] Roadmap execution started. Goal: " + roadmap.getGoal());
+    }
+
+    public void startFollow(AIPlayer player, net.minecraft.world.entity.player.Player target) {
+        this.followTarget = target;
+        player.setAgentState(AgentState.FOLLOW_PLAYER);
+        stopAllControllers(player);
+        System.out.println("[BlockAI] Started following player: " + target.getName().getString());
     }
 
     public void start(AIPlayer player) {
@@ -29,7 +49,7 @@ public class AgentController {
 
         if (this.currentRoadmap != null) {
             System.out.println("[BlockAI] Agent state: " + currentState + " -> RUNNING");
-            this.currentRoadmap.setState(ExecutionState.RUNNING);
+            this.currentRoadmap.setState(TaskState.RUNNING);
             player.setAgentState(AgentState.RUNNING);
         } else {
             System.out.println("[BlockAI] Agent state: " + currentState + " -> RUNNING (Idle, waiting for task)");
@@ -38,8 +58,8 @@ public class AgentController {
     }
 
     public void pause(AIPlayer player) {
-        if (this.currentRoadmap != null && this.currentRoadmap.getState() == ExecutionState.RUNNING) {
-            this.currentRoadmap.setState(ExecutionState.PAUSED);
+        if (this.currentRoadmap != null && this.currentRoadmap.getState() == TaskState.RUNNING) {
+            this.currentRoadmap.setState(TaskState.PAUSED);
         }
         player.setAgentState(AgentState.PAUSED);
         stopAllControllers(player);
@@ -47,8 +67,8 @@ public class AgentController {
     }
 
     public void resume(AIPlayer player) {
-        if (this.currentRoadmap != null && (this.currentRoadmap.getState() == ExecutionState.PAUSED || this.currentRoadmap.getState() == ExecutionState.STOPPED)) {
-            this.currentRoadmap.setState(ExecutionState.RUNNING);
+        if (this.currentRoadmap != null && (this.currentRoadmap.getState() == TaskState.PAUSED || this.currentRoadmap.getState() == TaskState.STOPPED)) {
+            this.currentRoadmap.setState(TaskState.RUNNING);
         }
         player.setAgentState(AgentState.RUNNING);
         System.out.println("[BlockAI] Roadmap execution resumed.");
@@ -56,7 +76,7 @@ public class AgentController {
 
     public void stop(AIPlayer player) {
         if (this.currentRoadmap != null) {
-            this.currentRoadmap.setState(ExecutionState.STOPPED);
+            this.currentRoadmap.setState(TaskState.STOPPED);
         }
         player.setAgentState(AgentState.STOPPED);
         stopAllControllers(player);
@@ -66,9 +86,9 @@ public class AgentController {
     public void stopAllControllers(AIPlayer player) {
         if (player != null) {
             player.movementController.stop();
-            player.gatheringController.stop();
+            player.gatheringController.stop(player);
             player.clearAreaController.stop();
-            player.excavationController.stop();
+            player.excavationController.stop(player);
         }
     }
 
@@ -77,32 +97,48 @@ public class AgentController {
     }
 
     public void tick(AIPlayer player) {
-        if (currentRoadmap == null) return;
-        
         if (!player.canExecuteAction()) {
             return;
         }
+        
+        if (player.getAgentState() == AgentState.FOLLOW_PLAYER) {
+            if (followTarget != null && followTarget.isAlive() && followTarget.level() == player.level()) {
+                double distSq = player.distanceToSqr(followTarget);
+                if (distSq > 9.0) { // More than 3 blocks away
+                    if (!player.movementController.hasPath() || player.tickCount % 20 == 0) {
+                        player.movementController.setPath(java.util.List.of(followTarget.blockPosition()), "FOLLOW_" + followTarget.getUUID());
+                    }
+                } else {
+                    player.movementController.stop();
+                }
+            } else {
+                player.setAgentState(AgentState.STOPPED); // Target lost
+            }
+            return;
+        }
 
-        if (currentRoadmap.getState() == ExecutionState.STOPPED
-                || currentRoadmap.getState() == ExecutionState.COMPLETED
-                || currentRoadmap.getState() == ExecutionState.FAILED) {
+        if (currentRoadmap == null) return;
+
+        if (currentRoadmap.getState() == TaskState.STOPPED
+                || currentRoadmap.getState() == TaskState.COMPLETED
+                || currentRoadmap.getState() == TaskState.FAILED) {
             stopAllControllers(player);
             return;
         }
 
-        if (currentRoadmap.getState() != ExecutionState.RUNNING) {
+        if (currentRoadmap.getState() != TaskState.RUNNING) {
             return;
         }
 
         int index = currentRoadmap.getCurrentTaskIndex();
         if (index >= currentRoadmap.getTasks().size()) {
-            currentRoadmap.setState(ExecutionState.COMPLETED);
+            currentRoadmap.setState(TaskState.COMPLETED);
             System.out.println("[BlockAI] Roadmap completed after all tasks were verified.");
             com.blockai.client.screen.BlockAIChatScreen.addMessage("Roadmap completed successfully.");
             stopAllControllers(player);
 
             // Record task success in learning memory
-            LearningMemory.getInstance().recordTaskOutcome(
+            ResourceMemory.getInstance().recordTaskOutcome(
                     currentRoadmap.getGoal(), true, "completed", "All tasks done"
             );
             return;
@@ -110,11 +146,11 @@ public class AgentController {
 
         RoadmapTask currentTask = currentRoadmap.getTasks().get(index);
 
-        if (currentTask.getStatus() == TaskStatus.PENDING) {
+        if (currentTask.getStatus() == RoadmapTaskType.PENDING) {
             System.out.println("[BlockAI] Analyzing task: " + currentTask.getDescription());
             
             // Resolve dependencies dynamically using the local knowledge base
-            java.util.List<RoadmapTask> expandedTasks = com.blockai.knowledge.DependencyResolver.resolveDependencies(currentTask, player);
+            java.util.List<RoadmapTask> expandedTasks = com.blockai.ai.knowledge.DependencyResolver.resolveDependencies(currentTask, player);
             
             if (expandedTasks.size() > 1) {
                 System.out.println("[BlockAI] Task requires prerequisites. Expanding into " + expandedTasks.size() + " sub-tasks.");
@@ -129,15 +165,19 @@ public class AgentController {
             System.out.println("[BlockAI] Task " + (index + 1) + "/" + currentRoadmap.getTasks().size() + " started");
             System.out.println("[BlockAI] Task type: " + currentTask.getType());
             System.out.println("[BlockAI] Task description: " + currentTask.getDescription());
-            currentTask.setStatus(TaskStatus.IN_PROGRESS);
+            currentTask.setStatus(RoadmapTaskType.IN_PROGRESS);
             taskTickCount = 0;
             com.blockai.client.screen.BlockAIChatScreen.addMessage("Starting task " + (index + 1) + ": " + currentTask.getDescription());
         }
 
-        if (currentTask.getStatus() == TaskStatus.IN_PROGRESS) {
+        if (currentTask.getStatus() == RoadmapTaskType.IN_PROGRESS) {
             String type = currentTask.getType().toLowerCase();
             boolean isFinished = false;
             boolean isFailed = false;
+
+            boolean hasResource = currentTask.getResourceCategory() != null || currentTask.getSpecificItem() != null || currentTask.getQuantity() > 0;
+            boolean isGather = type.contains("mine") || type.contains("gather") || type.contains("collect") || type.contains("resource") || 
+                               (type.contains("excavate") && hasResource && currentTask.getDescription().toLowerCase().contains("collect"));
 
             // CLEAR_AREA — dedicated controller
             if (type.contains("clear")) {
@@ -147,10 +187,10 @@ public class AgentController {
                     player.clearAreaController.start(player, radius, allowsExcavation);
                 }
 
-                ControllerState state = player.clearAreaController.tick(player);
-                if (state == ControllerState.SUCCESS) {
+                TaskResult state = player.clearAreaController.tick(player);
+                if (state == TaskResult.SUCCESS) {
                     isFinished = true;
-                } else if (state == ControllerState.FAILED) {
+                } else if (state == TaskResult.FAILED) {
                     taskTickCount++;
                     if (taskTickCount > 200) {
                         isFailed = true;
@@ -160,25 +200,13 @@ public class AgentController {
             // EXCAVATE — physical layer-by-layer digging
             else if (type.contains("excavate")) {
                 if (!player.excavationController.isActive()) {
-                    int width = 1;
-                    int length = 1;
-                    String desc = currentTask.getDescription().toLowerCase();
-                    java.util.regex.Matcher m = java.util.regex.Pattern.compile("(\\d+)x(\\d+)").matcher(desc);
-                    if (m.find()) {
-                        width = Integer.parseInt(m.group(1));
-                        length = Integer.parseInt(m.group(2));
-                    } else {
-                        // Fallback
-                        width = currentTask.getRadius() > 0 ? currentTask.getRadius() : 1;
-                        length = width;
-                    }
-                    player.excavationController.start(player, width, length);
+                    player.excavationController.start(player);
                 }
 
-                ControllerState state = player.excavationController.tick(player);
-                if (state == ControllerState.SUCCESS) {
+                TaskResult state = player.excavationController.tick(player);
+                if (state == TaskResult.SUCCESS) {
                     isFinished = true;
-                } else if (state == ControllerState.FAILED) {
+                } else if (state == TaskResult.FAILED) {
                     taskTickCount++;
                     if (taskTickCount > 200) {
                         isFailed = true;
@@ -186,19 +214,19 @@ public class AgentController {
                 }
             }
             // GATHERING — category-based resource collection
-            else if (type.contains("mine") || type.contains("gather") || type.contains("collect") || type.contains("resource")) {
-                if (player.gatheringController.isIdle()) {
-                    ResourceRequirement req = buildResourceRequirement(currentTask);
+            else if (isGather) {
+                if (!player.gatheringController.isActive()) {
+                    ResourceResolver req = buildResourceRequirement(currentTask);
                     System.out.println("[BlockAI] Resource requirement: " + req);
                     System.out.println("[BlockAI]   Accepted blocks: " + req.getAcceptedBlocks());
                     System.out.println("[BlockAI]   Already in inventory: " + req.countInInventory(player) + "/" + req.getQuantity());
-                    player.gatheringController.setRequirement(req);
+                    player.gatheringController.start(player, req, String.valueOf(currentTask.getId()));
                 }
 
-                ControllerState state = player.gatheringController.tick(player);
-                if (state == ControllerState.SUCCESS) {
+                TaskResult state = player.gatheringController.tick(player);
+                if (state == TaskResult.SUCCESS) {
                     isFinished = true;
-                } else if (state == ControllerState.NO_TARGET || state == ControllerState.FAILED) {
+                } else if (state == TaskResult.NO_TARGET || state == TaskResult.FAILED) {
                     taskTickCount++;
                     if (taskTickCount > 200) {
                         isFailed = true;
@@ -218,7 +246,7 @@ public class AgentController {
                 
                 player.craftingController.tick(player);
                 
-                if (player.craftingController.getState() == ControllerState.SUCCESS) {
+                if (player.craftingController.getState() == TaskResult.SUCCESS) {
                     isFinished = true;
                 } else {
                     taskTickCount++;
@@ -232,10 +260,10 @@ public class AgentController {
                 // Perform an actual scan
                 if (taskTickCount == 0) {
                     System.out.println("[BlockAI] Observation task: Scanning environment...");
-                    WorldObserver.scanLocalArea(player, 32);
+                    WorldScanner.scanLocalArea(player, 32);
 
                     // Log what was found
-                    var memory = WorldObserver.MEMORY;
+                    var memory = WorldScanner.MEMORY;
                     System.out.println("[BlockAI] Observation results:");
                     for (String blockType : memory.getAll().keySet()) {
                         int count = memory.getKnownBlocks(blockType).size();
@@ -259,20 +287,20 @@ public class AgentController {
 
             if (isFinished) {
                 System.out.println("[BlockAI] Task " + (index + 1) + "/" + currentRoadmap.getTasks().size() + " verified DONE");
-                currentTask.setStatus(TaskStatus.DONE);
+                currentTask.setStatus(RoadmapTaskType.DONE);
                 currentRoadmap.setCurrentTaskIndex(index + 1);
                 taskTickCount = 0;
-                player.gatheringController.stop();
+                player.gatheringController.stop(player);
                 player.clearAreaController.stop();
-                player.excavationController.stop();
+                player.excavationController.stop(player);
             } else if (isFailed) {
-                currentTask.setStatus(TaskStatus.FAILED);
-                currentRoadmap.setState(ExecutionState.FAILED);
+                currentTask.setStatus(RoadmapTaskType.FAILED);
+                currentRoadmap.setState(TaskState.FAILED);
                 System.out.println("[BlockAI] Roadmap failed at task " + (index + 1));
                 stopAllControllers(player);
 
                 // Record failure
-                LearningMemory.getInstance().recordTaskOutcome(
+                ResourceMemory.getInstance().recordTaskOutcome(
                         currentRoadmap.getGoal(), false,
                         currentTask.getDescription(),
                         "Failed at task " + (index + 1)
@@ -282,10 +310,10 @@ public class AgentController {
     }
 
     /**
-     * Build a ResourceRequirement from a RoadmapTask.
+     * Build a ResourceResolver from a RoadmapTask.
      * Priority: task metadata > description parsing > fallback
      */
-    private ResourceRequirement buildResourceRequirement(RoadmapTask task) {
+    private ResourceResolver buildResourceRequirement(RoadmapTask task) {
         // 1. Try task metadata from Groq
         String catName = task.getResourceCategory();
         String specific = task.getSpecificItem();
@@ -308,7 +336,7 @@ public class AgentController {
             System.out.println("[BlockAI] WARNING: Could not determine resource category, defaulting to WOOD_LOG");
         }
 
-        return new ResourceRequirement(category, specific, qty);
+        return new ResourceResolver(category, specific, qty);
     }
 
     private int taskTickCount = 0;
